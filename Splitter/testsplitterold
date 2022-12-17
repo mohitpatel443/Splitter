@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: MIT
+
+const { expect } = require('chai');
+const { waffle, ethers } = require('hardhat');
+const { BN } = require('ethers');
+const { inTransaction } = require('@openzeppelin/test-helpers/src/expectEvent');
+
+describe('splitter Contract', () => {
+
+    before(async () => {
+
+        [owner, user1, user2, user3, user4, user5, user6, ...users] = await ethers.getSigners();
+        // Getting signer of platform address
+        platformOwner = new ethers.Wallet(process.env.privateKey, waffle.provider);
+
+        UniswapV2Factory = await ethers.getContractFactory("UniswapV2Factory");
+        Factory = await UniswapV2Factory.deploy(owner.address);
+        await Factory.deployed();
+
+        Sample = await(await ethers.getContractFactory('SampleERC20')).deploy();
+
+        WETH9 = await ethers.getContractFactory("WETH9");
+        WETH = await WETH9.deploy();
+        await WETH.deployed();
+
+        UniswapV2Router02 = await ethers.getContractFactory("UniswapV2Router02");
+        Router = await UniswapV2Router02.deploy(Factory.address, WETH.address);
+        await Router.deployed();
+
+        BUSDContract = await ethers.getContractFactory("BUSD");
+        BUSD = await BUSDContract.deploy();
+        await BUSD.deployed();
+
+        splittercontract = await ethers.getContractFactory("Splitter");
+        Splitter = await splittercontract.deploy(Router.address, BUSD.address, Factory.address);
+        await Splitter.deployed();
+
+    });
+    describe('Testing swap function', () => {
+
+        it('Owner Adding Liquidity of token', async () => {
+            await BUSD.approve(Router.address, ethers.utils.parseUnits("10000000"));
+            await Sample.approve(Router.address, ethers.utils.parseUnits("10000000"));
+            await Router.addLiquidity(
+                BUSD.address, 
+                Sample.address,
+                ethers.utils.parseUnits("10000000"), 
+                ethers.utils.parseUnits("10000000"), 
+                0, 
+                0, 
+                owner.address, 
+                99999999999
+            );
+        });
+
+        it('Adding Liquidity of BUSD', async () => {
+            await BUSD.approve(Router.address, ethers.utils.parseEther("20000000"));
+            
+            await Router.addLiquidityETH(
+                BUSD.address, 
+                ethers.utils.parseEther("10000000"), 
+                0, 
+                0, 
+                owner.address, 
+                99999999999,
+                {
+                    value: ethers.utils.parseEther("100")
+                }
+            );
+        });
+
+       it("Test Swap",async()=>
+       {
+        
+        await BUSD.approve(Splitter.address,  ethers.utils.parseEther("100"));
+        await Splitter.swap(user1.address,user3.address, ethers.utils.parseEther("50"),Sample.address);
+        expect(await BUSD.balanceOf(user1.address)).to.equal(ethers.utils.parseUnits("24.5"));
+        expect(await Sample.balanceOf(user3.address)).to.equal(ethers.utils.parseUnits("24.5"));
+        // console.log(await BUSD.balanceOf(user1.address)); 
+        // console.log(await Sample.balanceOf(user3.address)); 
+
+       })       
+    
+    });
+});

@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.14;
+
+import "./interfaces.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+interface IERC20Burnable
+    {
+        function burn(uint256 amount) external;
+    }
+
+contract Splitter is Ownable
+{
+
+    address BUSD;
+    IUniswapV2Router02 public uniswapV2Router;
+    // address Router;
+
+    constructor( address _router, address _BUSD)
+    {
+        BUSD = _BUSD;
+        //  Router = _router;
+        uniswapV2Router = IUniswapV2Router02(_router);
+    }
+    
+    function swap(address _account1, uint256 amount, address _token) public 
+    {
+        require(_account1 != address(0), "Invalid address");
+        require(_token != address(0), "Invalid address");
+        require(amount != 0, "Invalid amount");
+
+        // 1 busd to bnb         
+        IERC20(BUSD).transferFrom(msg.sender, address(this), amount);
+        swapTokensForETH(1 ether, address(this));
+        IERC20 busdToken = IERC20(BUSD);
+
+        amount = amount - 1 ether;
+
+        //half busd to account 1
+        uint256 busdamount = amount/2;
+        busdToken.transferFrom(msg.sender, _account1, busdamount);
+
+        uint256 beforeTokenBalance = IERC20(_token).balanceOf(address(this));
+
+        swapTokensForTokens(busdamount, address(this), _token);
+
+        uint256 afterTokenBalance = IERC20(_token).balanceOf(address(this));
+
+        uint256 burnAmount = afterTokenBalance - beforeTokenBalance;
+        
+        if (burnAmount > 0) 
+        {
+            IERC20Burnable(_token).burn(burnAmount);
+        }
+
+    }
+   
+    function swapTokensForETH(uint256 tokenAmount, address to) private 
+    {
+        // generate the uniswap pair path of token -> wbnb
+        address[] memory path = new address[](2);
+        path[0] = BUSD;
+        path[1] = uniswapV2Router.WETH();
+
+        IERC20(BUSD).approve(address(uniswapV2Router), tokenAmount);
+ 
+        // make the swap
+        uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens
+        (
+            tokenAmount,
+            0, // accept any amount of BNB
+            path,
+            to,
+            block.timestamp
+        );
+    }
+
+    function swapTokensForTokens(uint256 tokenAmount, address to, address _token) private 
+    {
+        // generate the uniswap pair path of token -> weth
+        address[] memory path = new address[](2);
+        path[0] = BUSD;
+        path[1] = _token;
+
+        IERC20(BUSD).approve(address(uniswapV2Router), tokenAmount);
+
+        // make the swap
+        uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens
+        (
+            tokenAmount,
+            0, // accept any amount of BUSD
+            path,
+            to,
+            block.timestamp
+        );
+    }
+    receive () external payable {}
+}

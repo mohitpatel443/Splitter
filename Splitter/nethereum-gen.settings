@@ -1,0 +1,7 @@
+{
+    "projectName": "Splitter",
+    "namespace": "Splitter.Contracts",
+    "lang": 0,
+    "autoCodeGen": true,
+    "projectPath": "../"
+}
